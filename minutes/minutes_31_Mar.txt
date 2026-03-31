@@ -12,8 +12,8 @@ Agenda item(s)
 
 Action items			          Owner(s)		    Deadline 		  Status 
 Read assignment brief       All             31/03/2026    In progress
-Task 7.1                    Jennifer        14/04/2026    In progress
+Task 7.1                    Harry           14/04/2026    In progress
 Task 7.2                    Anu             14/04/2026    In progress
 Task 7.3                    Tarang          14/04/2026    In progress
-Task 7.4                    Harry           14/04/2026    In progress
+Task 7.4                    Jennifer        14/04/2026    In progress
 Begin work on tasks         All             31/03/2026    In progress
