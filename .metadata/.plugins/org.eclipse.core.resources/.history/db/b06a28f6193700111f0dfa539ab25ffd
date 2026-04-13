@@ -1,0 +1,24 @@
+#ifndef COMPASS_H
+#define COMPASS_H
+
+#include <stdint.h>
+
+typedef struct
+{
+    /* Raw magnetometer readings */
+    int16_t x;
+    int16_t y;
+    int16_t z;
+
+    /* Calculated heading in degrees */
+    float heading;
+
+    /* Timestamp of reading (ms since startup) */
+    uint32_t timestamp;
+
+} CompassData;
+
+void Compass_Init(void);
+void Compass_Read(CompassData *data);
+
+#endif

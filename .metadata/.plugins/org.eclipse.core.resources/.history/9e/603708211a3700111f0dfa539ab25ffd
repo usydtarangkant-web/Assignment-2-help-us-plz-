@@ -1,0 +1,27 @@
+#include "compass.h"
+#include "stm32f303xc.h"
+#include <math.h>
+
+extern volatile uint32_t systemMillis;
+
+/* Reads compass and fills structure */
+void Compass_Read(CompassData *data)
+{
+    uint8_t raw[6];
+
+    I2C_ReadRegisters(OUT_X_H_M, raw, 6);
+
+    data->x = (raw[0] << 8) | raw[1];
+    data->z = (raw[2] << 8) | raw[3];
+    data->y = (raw[4] << 8) | raw[5];
+
+    /* Calculate heading */
+    data->heading = atan2((float)data->y, (float)data->x) * 180.0f / 3.14159f;
+
+    /* Ensure positive angle */
+    if(data->heading < 0)
+        data->heading += 360.0f;
+
+    /* Save timestamp */
+    data->timestamp = systemMillis;
+}

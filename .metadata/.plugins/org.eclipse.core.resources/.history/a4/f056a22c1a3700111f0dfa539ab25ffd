@@ -1,0 +1,17 @@
+#include "compass.h"
+
+CompassData compass;
+
+int main(void)
+{
+    Compass_Init();
+
+    while (1)
+    {
+        Compass_Read(&compass);
+
+        /* Now compass.x, compass.y, compass.z contain data */
+
+        for (volatile int i = 0; i < 100000; i++);
+    }
+}
