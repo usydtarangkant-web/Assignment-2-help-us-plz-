@@ -1,0 +1,37 @@
+#include "stm32f303xc.h"
+#include "compass.h"
+#include "compass_led.h"
+
+
+volatile uint32_t tick_ms = 0;
+
+
+CompassData compass;
+
+
+void SysTick_Handler(void)
+{
+    tick_ms++;
+}
+
+
+int main(void)
+{
+    SCB->CPACR |= (0xFUL << 20);
+
+    SysTick_Config(8000);
+
+    compassInit();
+
+    compassLEDInit();
+
+    while (1)
+    {
+        if (compassRead(&compass) == 0)
+        {
+            compassLEDDisplay(&compass);
+        }
+
+        for (volatile int i = 0; i < 100000; i++);
+    }
+}

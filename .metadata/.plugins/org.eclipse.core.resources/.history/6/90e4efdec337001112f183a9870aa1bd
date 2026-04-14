@@ -1,0 +1,183 @@
+#include "compass.h"             // Include compass header
+#include <math.h>                // Needed for atan2()
+
+
+/* Compass I2C slave address */
+#define COMPASS_ADDR 0x1E
+
+
+/* Compass register addresses */
+#define CRA_REG_M   0x00         // Configuration Register A
+#define CRB_REG_M   0x01         // Configuration Register B
+#define MR_REG_M    0x02         // Mode Register
+#define OUT_X_H_M   0x03         // First output data register
+
+
+/* Global millisecond timer from main.c */
+extern volatile uint32_t tick_ms;
+
+
+/* Wait until a particular I2C flag is set */
+int waitSet(uint32_t flag, uint32_t to)
+{
+    uint32_t start = tick_ms;    // Save start time
+
+    while (!(I2C1->ISR & flag))  // Loop until flag becomes set
+    {
+        if ((tick_ms - start) >= to) // Check timeout
+        {
+            return -1;           // Return error if timeout exceeded
+        }
+    }
+
+    return 0;                    // Success
+}
+
+
+/* Initialise I2C1 peripheral */
+void i2cInit(void)
+{
+    RCC->AHBENR |= RCC_AHBENR_GPIOBEN;    // Enable GPIOB clock
+    RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;   // Enable I2C1 clock
+
+
+    /* Set PB6 and PB7 to alternate function mode */
+    GPIOB->MODER =
+        (GPIOB->MODER & ~(GPIO_MODER_MODER6 | GPIO_MODER_MODER7)) |
+        (GPIO_MODER_MODER6_1 | GPIO_MODER_MODER7_1);
+
+
+    /* Set PB6/PB7 to open-drain for I2C */
+    GPIOB->OTYPER |= GPIO_OTYPER_OT_6 | GPIO_OTYPER_OT_7;
+
+
+    /* Select Alternate Function 4 for I2C */
+    GPIOB->AFR[0] =
+        (GPIOB->AFR[0] &
+        ~((0xFUL << GPIO_AFRL_AFRL6_Pos) |
+          (0xFUL << GPIO_AFRL_AFRL7_Pos))) |
+        (4UL << GPIO_AFRL_AFRL6_Pos) |
+        (4UL << GPIO_AFRL_AFRL7_Pos);
+
+
+    I2C1->CR1 &= ~I2C_CR1_PE;    // Disable I2C before configuring
+
+    I2C1->TIMINGR = 0x00310309;  // Set timing for 400kHz I2C
+
+    I2C1->CR1 = I2C_CR1_PE;      // Enable I2C
+}
+
+
+/* Write one value to one register */
+int i2cWriteReg(uint8_t addr, uint8_t reg, uint8_t val)
+{
+    /* Configure write transaction */
+    I2C1->CR2 =
+        (addr << 1) |                        // Slave address
+        (2UL << I2C_CR2_NBYTES_Pos) |       // 2 bytes to send
+        I2C_CR2_START;                      // Start transaction
+
+
+    if (waitSet(I2C_ISR_TXIS, 10)) return -1; // Wait for TX ready
+    I2C1->TXDR = reg;                        // Send register address
+
+
+    if (waitSet(I2C_ISR_TXIS, 10)) return -1; // Wait for TX ready
+    I2C1->TXDR = val;                        // Send data value
+
+
+    if (waitSet(I2C_ISR_TC, 10)) return -1;  // Wait for transfer complete
+
+    I2C1->CR2 |= I2C_CR2_STOP;               // Send stop condition
+
+    return 0;                                // Success
+}
+
+
+/* Read multiple sequential registers */
+int i2cReadBurst(uint8_t addr, uint8_t reg, uint8_t* buf, uint8_t len)
+{
+    /* Begin write transaction to specify register */
+    I2C1->CR2 =
+        (addr << 1) |
+        (1UL << I2C_CR2_NBYTES_Pos) |
+        I2C_CR2_START;
+
+
+    if (waitSet(I2C_ISR_TXIS, 10)) return -1; // Wait TX ready
+    I2C1->TXDR = reg;                         // Send register address
+
+
+    if (waitSet(I2C_ISR_TC, 10)) return -1;  // Wait complete
+
+
+    /* Begin read transaction */
+    I2C1->CR2 =
+        (addr << 1) |
+        I2C_CR2_RD_WRN |                      // Read mode
+        ((uint32_t)len << I2C_CR2_NBYTES_Pos)|
+        I2C_CR2_START |
+        I2C_CR2_AUTOEND;
+
+
+    /* Read bytes into buffer */
+    for (uint8_t i = 0; i < len; i++)
+    {
+        if (waitSet(I2C_ISR_RXNE, 10)) return -1;
+
+        buf[i] = I2C1->RXDR;
+    }
+
+    return 0;
+}
+
+
+/* Initialise compass registers */
+void compassInit(void)
+{
+    i2cInit();                               // Initialise I2C first
+
+
+    i2cWriteReg(COMPASS_ADDR, CRA_REG_M, 0x14); // Set 30Hz output rate
+    i2cWriteReg(COMPASS_ADDR, CRB_REG_M, 0x20); // Set gain
+    i2cWriteReg(COMPASS_ADDR, MR_REG_M, 0x00);  // Continuous conversion mode
+}
+
+
+/* Read compass data */
+int compassRead(CompassData* data)
+{
+    uint8_t raw[6];                          // Temporary raw byte storage
+
+
+    if (i2cReadBurst(COMPASS_ADDR, OUT_X_H_M, raw, 6))
+    {
+        return -1;                          // Return error if read fails
+    }
+
+
+    /* Combine high and low bytes into signed values */
+    data->x = (raw[0] << 8) | raw[1];
+
+    data->z = (raw[2] << 8) | raw[3];
+
+    data->y = (raw[4] << 8) | raw[5];
+
+
+    /* Calculate heading angle */
+    data->heading =
+        atan2((float)data->y, (float)data->x) *
+        180.0f / 3.14159f;
+
+
+    /* Ensure heading stays between 0–360 */
+    if (data->heading < 0)
+    {
+        data->heading += 360.0f;
+    }
+
+
+    data->timestamp = tick_ms;              // Save timestamp
+
+    return 0;                               // Success
+}

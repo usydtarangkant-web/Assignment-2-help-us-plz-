@@ -1,0 +1,4 @@
+"./Src/compass.o"
+"./Src/compass_led.o"
+"./Src/main.o"
+"./Startup/startup_stm32f303vctx.o"
