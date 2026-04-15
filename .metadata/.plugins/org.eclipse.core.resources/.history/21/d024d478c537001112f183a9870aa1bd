@@ -1,0 +1,51 @@
+#include "stm32f303xc.h"
+#include "compass.h"
+
+
+volatile uint32_t tick_ms = 0;
+
+
+/* Global compass structure */
+CompassData compass;
+
+
+/* SysTick interrupt */
+void SysTick_Handler(void)
+{
+    tick_ms++;
+}
+
+
+/* Set GPIO pin mode */
+void gpioSetMode(GPIO_TypeDef* port, uint8_t pin, uint32_t mode)
+{
+    port->MODER &= ~(0x3UL << (pin * 2));
+    port->MODER |=  (mode << (pin * 2));
+}
+
+
+/* Turn off all LEDs */
+void clearLEDs(void)
+{
+    GPIOE->ODR &= ~(0xFF << 8);
+}
+
+
+/* Main program */
+int main(void)
+{
+    RCC->AHBENR |= RCC_AHBENR_GPIOEEN;
+
+    for (int i = 8; i <= 15; i++)
+    {
+        gpioSetMode(GPIOE, i, 0x1);
+    }
+
+    GPIOE->ODR |= (1 << 8);
+
+    compassInit();
+
+    GPIOE->ODR |= (1 << 9);
+
+    while(1);
+}

@@ -1,0 +1,33 @@
+#include "stm32f303xc.h"     // STM32 register definitions
+#include "compass.h"         // Compass module
+
+
+volatile uint32_t tick_ms = 0; // Global millisecond timer
+
+
+/* Runs every SysTick interrupt */
+void SysTick_Handler(void)
+{
+    tick_ms++;               // Increment timer every 1ms
+}
+
+
+int main(void)
+{
+    SCB->CPACR |= (0xFUL << 20); // Enable floating point unit
+
+
+    SysTick_Config(8000);       // Generate interrupt every 1ms
+
+
+    CompassData compass;        // Create compass data structure
+
+
+    compassInit();              // Initialise compass
+
+
+    while (1)
+    {
+        compassRead(&compass);  // Continuously read compass
+    }
+}

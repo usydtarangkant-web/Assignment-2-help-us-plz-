@@ -1,0 +1,102 @@
+/*
+Main program for STM32F3 Discovery onboard compass test.
+Reads onboard LSM303AGR magnetometer via I2C and displays heading on LEDs.
+*/
+
+#include "stm32f303xc.h"
+#include "compass.h"
+
+
+/* Global millisecond timer */
+volatile uint32_t tick_ms = 0;
+
+
+/* Global compass data */
+CompassData compass;
+
+
+/* SysTick interrupt every 1ms */
+void SysTick_Handler(void)
+{
+    tick_ms++;
+}
+
+
+/* Helper function to set GPIO pin mode */
+void gpioSetMode(GPIO_TypeDef* port, uint8_t pin, uint32_t mode)
+{
+    port->MODER &= ~(0x3UL << (pin * 2));
+    port->MODER |=  (mode << (pin * 2));
+}
+
+
+/* Turn off all LEDs */
+void clearLEDs(void)
+{
+    GPIOE->ODR &= ~(0xFF << 8);
+}
+
+
+int main(void)
+{
+    /* Enable floating point unit */
+    SCB->CPACR |= (0xFUL << 20);
+
+    /* Configure SysTick for 1ms interrupts */
+    SysTick_Config(8000);
+
+    /* Enable GPIOE clock */
+    RCC->AHBENR |= RCC_AHBENR_GPIOEEN;
+
+    /* Set PE8–PE15 as outputs */
+    for (int i = 8; i <= 15; i++)
+    {
+        gpioSetMode(GPIOE, i, 0x1);
+    }
+
+    /* Startup LED */
+    GPIOE->ODR |= (1 << 8);
+
+    /* Initialise compass */
+    compassInit();
+
+    /* Show init complete */
+    GPIOE->ODR |= (1 << 9);
+
+    while (1)
+    {
+        if (compassRead(&compass) == 0)
+        {
+            clearLEDs();
+
+            if (compass.heading < 45)
+                GPIOE->ODR |= (1 << 8);
+
+            else if (compass.heading < 90)
+                GPIOE->ODR |= (1 << 9);
+
+            else if (compass.heading < 135)
+                GPIOE->ODR |= (1 << 10);
+
+            else if (compass.heading < 180)
+                GPIOE->ODR |= (1 << 11);
+
+            else if (compass.heading < 225)
+                GPIOE->ODR |= (1 << 12);
+
+            else if (compass.heading < 270)
+                GPIOE->ODR |= (1 << 13);
+
+            else if (compass.heading < 315)
+                GPIOE->ODR |= (1 << 14);
+
+            else
+                GPIOE->ODR |= (1 << 15);
+        }
+        else
+        {
+            /* Error = all LEDs on */
+            GPIOE->ODR |= (0xFF << 8);
+        }
+    }
+}

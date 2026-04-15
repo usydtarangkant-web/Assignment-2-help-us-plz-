@@ -1,0 +1,2 @@
+../Src/compass_led.c:4:6:compassLEDInit	16	static
+../Src/compass_led.c:16:6:compassLEDDisplay	16	static

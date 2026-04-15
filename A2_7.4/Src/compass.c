@@ -1,55 +1,33 @@
 #include "compass.h"
 #include <math.h>
 
-#define COMPASS_ADDR 0x1E
 
-volatile extern uint32_t systemMillis;
+#define COMPASS_ADDR 0x3C
+
+#define CFG_REG_A_M   0x60
+#define CFG_REG_B_M   0x61
+#define CFG_REG_C_M   0x62
+#define OUTX_L_REG_M  0x68
 
 
-void i2cWriteRegister(uint8_t reg, uint8_t value)
+extern volatile uint32_t tick_ms;
+
+
+int waitSet(uint32_t flag)
 {
-    I2C1->CR2 = (COMPASS_ADDR << 1) | (2 << 16) | I2C_CR2_START | I2C_CR2_AUTOEND;
-
-    while (!(I2C1->ISR & I2C_ISR_TXIS));
-    I2C1->TXDR = reg;
-
-    while (!(I2C1->ISR & I2C_ISR_TXIS));
-    I2C1->TXDR = value;
-
-    while (!(I2C1->ISR & I2C_ISR_STOPF));
-
-    I2C1->ICR |= I2C_ICR_STOPCF;
-}
-
-
-void i2cReadRegisters(uint8_t reg, uint8_t* buffer, uint8_t length)
-{
-    I2C1->CR2 = (COMPASS_ADDR << 1) | (1 << 16) | I2C_CR2_START;
-
-    while (!(I2C1->ISR & I2C_ISR_TXIS));
-    I2C1->TXDR = reg;
-
-    while (!(I2C1->ISR & I2C_ISR_TC));
-
-    I2C1->CR2 = (COMPASS_ADDR << 1) |
-                I2C_CR2_RD_WRN |
-                (length << 16) |
-                I2C_CR2_START |
-                I2C_CR2_AUTOEND;
-
-    for (int i = 0; i < length; i++)
+    for (volatile int i = 0; i < 100000; i++)
     {
-        while (!(I2C1->ISR & I2C_ISR_RXNE));
-        buffer[i] = I2C1->RXDR;
+        if (I2C1->ISR & flag)
+        {
+            return 0;
+        }
     }
 
-    while (!(I2C1->ISR & I2C_ISR_STOPF));
-
-    I2C1->ICR |= I2C_ICR_STOPCF;
+    return -1;
 }
 
 
-void compassInit(void)
+void i2cInit(void)
 {
     RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
     RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
@@ -57,38 +35,110 @@ void compassInit(void)
     GPIOB->MODER &= ~(0xFUL << 12);
     GPIOB->MODER |=  (0xAUL << 12);
 
-    GPIOB->AFR[0] |= (4 << 24) | (4 << 28);
-
     GPIOB->OTYPER |= (1 << 6) | (1 << 7);
+
+    GPIOB->PUPDR &= ~(0xFUL << 12);
+    GPIOB->PUPDR |=  (0x5UL << 12);
+
+    GPIOB->AFR[0] &= ~(0xFFUL << 24);
+    GPIOB->AFR[0] |=  (0x44UL << 24);
 
     I2C1->CR1 &= ~I2C_CR1_PE;
 
     I2C1->TIMINGR = 0x2000090E;
 
     I2C1->CR1 |= I2C_CR1_PE;
-
-    i2cWriteRegister(0x00, 0x14);
-    i2cWriteRegister(0x01, 0x20);
-    i2cWriteRegister(0x02, 0x00);
 }
 
 
-void compassRead(CompassData* data)
+int i2cWriteReg(uint8_t addr, uint8_t reg, uint8_t val)
+{
+    I2C1->ICR |= I2C_ICR_STOPCF;
+
+    I2C1->CR2 =
+        addr |
+        (2 << I2C_CR2_NBYTES_Pos) |
+        I2C_CR2_START;
+
+    if (waitSet(I2C_ISR_TXIS)) return -1;
+    I2C1->TXDR = reg;
+
+    if (waitSet(I2C_ISR_TXIS)) return -1;
+    I2C1->TXDR = val;
+
+    if (waitSet(I2C_ISR_TC)) return -1;
+
+    I2C1->CR2 |= I2C_CR2_STOP;
+
+    return 0;
+}
+
+
+int i2cReadBurst(uint8_t addr, uint8_t reg, uint8_t* buf, uint8_t len)
+{
+    I2C1->ICR |= I2C_ICR_STOPCF;
+
+    I2C1->CR2 =
+        addr |
+        (1 << I2C_CR2_NBYTES_Pos) |
+        I2C_CR2_START;
+
+    if (waitSet(I2C_ISR_TXIS)) return -1;
+    I2C1->TXDR = reg;
+
+    if (waitSet(I2C_ISR_TC)) return -1;
+
+    I2C1->CR2 =
+        addr |
+        I2C_CR2_RD_WRN |
+        (len << I2C_CR2_NBYTES_Pos) |
+        I2C_CR2_START |
+        I2C_CR2_AUTOEND;
+
+    for (uint8_t i = 0; i < len; i++)
+    {
+        if (waitSet(I2C_ISR_RXNE)) return -1;
+
+        buf[i] = I2C1->RXDR;
+    }
+
+    return 0;
+}
+
+
+void compassInit(void)
+{
+    i2cInit();
+
+    i2cWriteReg(COMPASS_ADDR, CFG_REG_A_M, 0x8C);
+    i2cWriteReg(COMPASS_ADDR, CFG_REG_B_M, 0x01);
+    i2cWriteReg(COMPASS_ADDR, CFG_REG_C_M, 0x10);
+}
+
+
+int compassRead(CompassData* data)
 {
     uint8_t raw[6];
 
-    i2cReadRegisters(0x03, raw, 6);
+    if (i2cReadBurst(COMPASS_ADDR, OUTX_L_REG_M | 0x80, raw, 6))
+    {
+        return -1;
+    }
 
-    data->x = (raw[0] << 8) | raw[1];
-    data->z = (raw[2] << 8) | raw[3];
-    data->y = (raw[4] << 8) | raw[5];
+    data->x = (raw[1] << 8) | raw[0];
+    data->y = (raw[3] << 8) | raw[2];
+    data->z = (raw[5] << 8) | raw[4];
 
-    data->heading = atan2(data->y, data->x) * 180 / 3.14159;
+    data->heading =
+        atan2((float)data->y, (float)data->x) *
+        180.0f / 3.14159f;
 
     if (data->heading < 0)
     {
-        data->heading += 360;
+        data->heading += 360.0f;
     }
 
-    data->timestamp = systemMillis;
+    data->timestamp = tick_ms;
+
+    return 0;
 }
