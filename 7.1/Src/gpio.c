@@ -1,5 +1,6 @@
 #include "gpio.h"
 
+/* Enable the clock for one GPIO port */
 static void gpio_enable_clock(GPIO_TypeDef *port)
 {
     if (port == GPIOA)
@@ -28,6 +29,7 @@ static void gpio_enable_clock(GPIO_TypeDef *port)
     }
 }
 
+/* Initialise one GPIO pin as input or output */
 void gpio_init_pin(GPIO_TypeDef *port, uint16_t pin, gpio_mode_t mode)
 {
     gpio_enable_clock(port);
@@ -40,6 +42,7 @@ void gpio_init_pin(GPIO_TypeDef *port, uint16_t pin, gpio_mode_t mode)
     }
 }
 
+/* Write high or low to one GPIO pin */
 void gpio_write_pin(GPIO_TypeDef *port, uint16_t pin, bool value)
 {
     if (value)
@@ -52,11 +55,13 @@ void gpio_write_pin(GPIO_TypeDef *port, uint16_t pin, bool value)
     }
 }
 
+/* Read the state of one GPIO pin */
 bool gpio_read_pin(GPIO_TypeDef *port, uint16_t pin)
 {
     return ((port->IDR & (1U << pin)) != 0U);
 }
 
+/* Toggle the output state of one GPIO pin */
 void gpio_toggle_pin(GPIO_TypeDef *port, uint16_t pin)
 {
     port->ODR ^= (1U << pin);
