@@ -1,0 +1,14 @@
+/Users/tarangkant/Desktop/ASSIGNMENT2/stm32f303-definitions/Core/Inc/core_cm4.h:1688:22:__NVIC_EnableIRQ	16	static
+../Src/serial.c:55:13:Serial_ResetRxState	16	static
+../Src/serial.c:78:13:Serial_ClearReadySlots	16	static
+../Src/serial.c:96:16:Serial_StorePacket	16	static
+../Src/serial.c:127:13:Serial_DebugSendChar	16	static
+../Src/serial.c:136:13:Serial_HandleUart4Irq	16	static
+../Src/serial.c:282:6:Serial_Init	8	static
+../Src/serial.c:358:6:Serial_SetRxCallback	16	static
+../Src/serial.c:363:6:Serial_SendChar	24	static
+../Src/serial.c:385:6:Serial_SendString	16	static
+../Src/serial.c:394:6:Serial_SendMsg	24	static
+../Src/serial.c:426:6:Serial_Task	24	static
+../Src/serial.c:456:6:UART4_IRQHandler	8	static
+../Src/serial.c:461:6:UART4_EXTI34_IRQHandler	8	static
