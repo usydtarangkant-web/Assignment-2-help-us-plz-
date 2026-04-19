@@ -26,4 +26,4 @@ void compassInit(void);
 int compassRead(CompassData* data);
 
 
-#endif
+#endif                          // End include guard
