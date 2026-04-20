@@ -1,165 +1,298 @@
-#include "compass.h"            // Include compass header file
-#include <math.h>               // Include math functions such as atan2()
+/*
+------------------------------------------------------------
+compass.c
+
+STM32F3 Discovery Board Compass Module
+
+Uses onboard LSM303AGR magnetometer via I2C1.
+
+Functions:
+1. Initialise I2C interface
+2. Configure compass sensor
+3. Read raw X, Y, Z magnetic values
+4. Apply simple offset calibration
+5. Calculate heading angle (0 to 360 deg)
+6. Store timestamp
+------------------------------------------------------------
+*/
+
+#include "compass.h"
+#include <math.h>
 
 
-/* I2C address of onboard magnetometer (LSM303AGR) */
+/*----------------------------------------------------------
+I2C slave address of onboard magnetometer
+----------------------------------------------------------*/
 #define COMPASS_ADDR 0x3C
 
 
-/* Magnetometer register addresses */
-#define CFG_REG_A_M   0x60      // Configuration register A
-#define CFG_REG_B_M   0x61      // Configuration register B
-#define CFG_REG_C_M   0x62      // Configuration register C
-#define OUTX_L_REG_M  0x68      // First output register for X-axis data
+/*----------------------------------------------------------
+Magnetometer register addresses
+----------------------------------------------------------*/
+#define CFG_REG_A_M   0x60     /* Configuration register A */
+#define CFG_REG_B_M   0x61     /* Configuration register B */
+#define CFG_REG_C_M   0x62     /* Configuration register C */
+#define OUTX_L_REG_M  0x68     /* First output register */
 
 
-/* Millisecond timer variable declared in main.c */
+/*----------------------------------------------------------
+Calibration offsets found experimentally by rotating board
+flat on table.
+
+Used to centre X/Y values around zero before atan2().
+----------------------------------------------------------*/
+#define X_OFFSET   (-370.0f)
+#define Y_OFFSET   (40.0f)
+
+
+/*----------------------------------------------------------
+Global millisecond timer declared in main.c
+----------------------------------------------------------*/
 extern volatile uint32_t tick_ms;
 
 
-/* Wait until selected I2C status flag becomes set */
-int waitSet(uint32_t flag)
+/*
+------------------------------------------------------------
+Wait until selected I2C flag becomes set
+
+Returns:
+0  = success
+-1 = timeout
+------------------------------------------------------------
+*/
+static int waitSet(uint32_t flag)
 {
-    for (volatile int i = 0; i < 100000; i++)   // Simple timeout loop
+    volatile uint32_t i;
+
+    for (i = 0; i < 100000; i++)
     {
-        if (I2C1->ISR & flag)                   // Check if flag is set
+        if (I2C1->ISR & flag)
         {
-            return 0;                          // Success
+            return 0;
         }
     }
 
-    return -1;                                 // Timeout error
+    return -1;
 }
 
 
-/* Initialise I2C1 peripheral and GPIO pins */
-void i2cInit(void)
-{
-    RCC->AHBENR |= RCC_AHBENR_GPIOBEN;         // Enable GPIOB clock
-    RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;        // Enable I2C1 clock
+/*
+------------------------------------------------------------
+Initialise I2C1 peripheral
 
-    /* Set PB6 and PB7 to alternate function mode */
+Pins:
+PB6 = SCL
+PB7 = SDA
+------------------------------------------------------------
+*/
+static void i2cInit(void)
+{
+    /* Enable clocks */
+    RCC->AHBENR  |= RCC_AHBENR_GPIOBEN;
+    RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
+
+    /* PB6/PB7 alternate function mode */
     GPIOB->MODER &= ~(0xFUL << 12);
     GPIOB->MODER |=  (0xAUL << 12);
 
-    /* Set PB6 and PB7 as open-drain outputs */
-    GPIOB->OTYPER |= (1 << 6) | (1 << 7);
+    /* Open-drain outputs */
+    GPIOB->OTYPER |= (1U << 6) | (1U << 7);
 
-    /* Enable pull-up resistors on PB6 and PB7 */
+    /* Pull-up resistors */
     GPIOB->PUPDR &= ~(0xFUL << 12);
     GPIOB->PUPDR |=  (0x5UL << 12);
 
-    /* Select Alternate Function 4 for I2C */
+    /* Alternate Function 4 = I2C1 */
     GPIOB->AFR[0] &= ~(0xFFUL << 24);
     GPIOB->AFR[0] |=  (0x44UL << 24);
 
-    I2C1->CR1 &= ~I2C_CR1_PE;                 // Disable I2C before setup
+    /* Disable before timing setup */
+    I2C1->CR1 &= ~I2C_CR1_PE;
 
-    I2C1->TIMINGR = 0x2000090E;              // Set timing for 100kHz I2C
+    /* 100 kHz timing (8 MHz clock) */
+    I2C1->TIMINGR = 0x2000090E;
 
-    I2C1->CR1 |= I2C_CR1_PE;                 // Enable I2C
+    /* Enable I2C */
+    I2C1->CR1 |= I2C_CR1_PE;
 }
 
 
-/* Write one byte to one sensor register */
-int i2cWriteReg(uint8_t addr, uint8_t reg, uint8_t val)
-{
-    I2C1->ICR |= I2C_ICR_STOPCF;             // Clear STOP flag
+/*
+------------------------------------------------------------
+Write one byte to one compass register
 
-    /* Configure write transfer */
+Returns:
+0  = success
+-1 = fail
+------------------------------------------------------------
+*/
+static int i2cWriteReg(uint8_t reg, uint8_t val)
+{
+    /* Clear previous STOP flag */
+    I2C1->ICR |= I2C_ICR_STOPCF;
+
+    /* Send 2 bytes: register + value */
     I2C1->CR2 =
-        addr |                               // Slave address
-        (2 << I2C_CR2_NBYTES_Pos) |          // Send 2 bytes total
-        I2C_CR2_START;                       // Generate START condition
+        COMPASS_ADDR |
+        (2U << I2C_CR2_NBYTES_Pos) |
+        I2C_CR2_START;
 
-    if (waitSet(I2C_ISR_TXIS)) return -1;   // Wait until TX ready
-    I2C1->TXDR = reg;                       // Send register address
+    if (waitSet(I2C_ISR_TXIS)) return -1;
+    I2C1->TXDR = reg;
 
-    if (waitSet(I2C_ISR_TXIS)) return -1;   // Wait until TX ready
-    I2C1->TXDR = val;                       // Send register data
+    if (waitSet(I2C_ISR_TXIS)) return -1;
+    I2C1->TXDR = val;
 
-    if (waitSet(I2C_ISR_TC)) return -1;     // Wait for transfer complete
+    if (waitSet(I2C_ISR_TC)) return -1;
 
-    I2C1->CR2 |= I2C_CR2_STOP;              // Generate STOP condition
+    /* Stop condition */
+    I2C1->CR2 |= I2C_CR2_STOP;
 
-    return 0;                               // Success
+    return 0;
 }
 
 
-/* Read multiple bytes starting from one register */
-int i2cReadBurst(uint8_t addr, uint8_t reg, uint8_t* buf, uint8_t len)
+/*
+------------------------------------------------------------
+Read multiple sequential registers
+
+Inputs:
+reg = first register address
+buf = destination buffer
+len = number of bytes
+
+Returns:
+0  = success
+-1 = fail
+------------------------------------------------------------
+*/
+static int i2cReadBurst(uint8_t reg,
+                        uint8_t *buf,
+                        uint8_t len)
 {
-    I2C1->ICR |= I2C_ICR_STOPCF;            // Clear STOP flag
+    uint8_t i;
 
     /* Send register address first */
     I2C1->CR2 =
-        addr |
-        (1 << I2C_CR2_NBYTES_Pos) |
+        COMPASS_ADDR |
+        (1U << I2C_CR2_NBYTES_Pos) |
         I2C_CR2_START;
 
-    if (waitSet(I2C_ISR_TXIS)) return -1;   // Wait for TX ready
-    I2C1->TXDR = reg;                       // Send start register
+    if (waitSet(I2C_ISR_TXIS)) return -1;
+    I2C1->TXDR = reg;
 
-    if (waitSet(I2C_ISR_TC)) return -1;     // Wait for complete
+    if (waitSet(I2C_ISR_TC)) return -1;
 
-    /* Restart transaction in read mode */
+    /* Restart in read mode */
     I2C1->CR2 =
-        addr |
-        I2C_CR2_RD_WRN |                    // Read mode
-        (len << I2C_CR2_NBYTES_Pos) |       // Number of bytes to receive
-        I2C_CR2_START |                     // Restart
-        I2C_CR2_AUTOEND;                   // Auto STOP at end
+        COMPASS_ADDR |
+        I2C_CR2_RD_WRN |
+        ((uint32_t)len << I2C_CR2_NBYTES_Pos) |
+        I2C_CR2_START |
+        I2C_CR2_AUTOEND;
 
-    for (uint8_t i = 0; i < len; i++)
+    for (i = 0; i < len; i++)
     {
-        if (waitSet(I2C_ISR_RXNE)) return -1; // Wait until byte received
+        if (waitSet(I2C_ISR_RXNE)) return -1;
 
-        buf[i] = I2C1->RXDR;                  // Store received byte
+        buf[i] = I2C1->RXDR;
     }
 
-    return 0;                                 // Success
+    return 0;
 }
 
 
-/* Initialise magnetometer sensor */
+/*
+------------------------------------------------------------
+Initialise compass sensor
+------------------------------------------------------------
+*/
 void compassInit(void)
 {
-    i2cInit();                               // Initialise I2C first
+    /* Initialise I2C hardware first */
+    i2cInit();
 
-    i2cWriteReg(COMPASS_ADDR, CFG_REG_A_M, 0x8C); // Continuous mode / ODR
-    i2cWriteReg(COMPASS_ADDR, CFG_REG_B_M, 0x01); // Gain setting
-    i2cWriteReg(COMPASS_ADDR, CFG_REG_C_M, 0x10); // Data ready config
+    /*
+    Configure sensor:
+    Continuous conversion mode
+    Output data rate enabled
+    */
+    i2cWriteReg(CFG_REG_A_M, 0x8C);
+    i2cWriteReg(CFG_REG_B_M, 0x01);
+    i2cWriteReg(CFG_REG_C_M, 0x10);
 }
 
 
-/* Read magnetometer values and calculate heading */
-int compassRead(CompassData* data)
-{
-    uint8_t raw[6];                          // Temporary raw byte array
+/*
+------------------------------------------------------------
+Read compass values
 
-    /* Read 6 bytes from output registers */
-    if (i2cReadBurst(COMPASS_ADDR, OUTX_L_REG_M | 0x80, raw, 6))
+Outputs:
+data->x
+data->y
+data->z
+data->heading
+data->timestamp
+
+Returns:
+0  = success
+-1 = fail
+------------------------------------------------------------
+*/
+int compassRead(CompassData *data)
+{
+    uint8_t raw[6];
+
+    float xCal;
+    float yCal;
+
+    /* Read 6 bytes starting from X register */
+    if (i2cReadBurst(OUTX_L_REG_M | 0x80, raw, 6))
     {
-        return -1;                          // Return error if failed
+        return -1;
     }
 
-    /* Combine low and high bytes into signed 16-bit values */
-    data->x = (raw[1] << 8) | raw[0];
-    data->y = (raw[3] << 8) | raw[2];
-    data->z = (raw[5] << 8) | raw[4];
+    /*
+    Convert bytes to signed 16-bit values
 
-    /* Calculate heading angle in degrees */
+    Sensor order observed on board:
+    X, Y, Z
+    */
+    data->x = (int16_t)((raw[1] << 8) | raw[0]);
+    data->y = (int16_t)((raw[3] << 8) | raw[2]);
+    data->z = (int16_t)((raw[5] << 8) | raw[4]);
+
+    /*
+    Apply offset calibration
+    This recentres raw values around zero.
+    */
+    xCal = (float)data->x - X_OFFSET;
+    yCal = (float)data->y - Y_OFFSET;
+
+    /*
+    Calculate heading angle in degrees
+    atan2 gives result from -180 to +180
+    */
     data->heading =
-        atan2((float)data->y, (float)data->x) *
+        atan2(yCal, xCal) *
         180.0f / 3.14159f;
 
-    /* Convert negative angle into 0–360 range */
-    if (data->heading < 0)
+    /* Correct board alignment */
+    data->heading += 45.0f;
+
+    /* Convert to 0 to 360 degrees */
+    if (data->heading < 0.0f)
     {
         data->heading += 360.0f;
     }
 
-    data->timestamp = tick_ms;              // Save current time
+    if (data->heading >= 360)
+    {
+        data->heading -= 360.0f;
+    }
 
-    return 0;                               // Success
+    /* Save current timestamp */
+    data->timestamp = tick_ms;
+
+    return 0;
 }
