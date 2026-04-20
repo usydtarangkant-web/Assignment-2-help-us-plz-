@@ -1,0 +1,12 @@
+../Src/timer.c:20:22:Timer_GetData	4
+../Src/timer.c:30:28:Timer_GetDataConst	4
+../Src/timer.c:40:22:Timer_Allocate	6
+../Src/timer.c:68:6:Timer_Init	3
+../Src/timer.c:90:6:Timer_InitTicks	3
+../Src/timer.c:112:6:Timer_Tick	7
+../Src/timer.c:144:6:Timer_Start	2
+../Src/timer.c:157:6:Timer_Stop	2
+../Src/timer.c:169:10:Timer_GetPeriod	2
+../Src/timer.c:181:6:Timer_SetPeriod	3
+../Src/timer.c:194:6:Timer_OnceMs	3
+../Src/timer.c:212:6:Timer_OnceTicks	3

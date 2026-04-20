@@ -1,0 +1,5 @@
+../Src/led.c:8:6:LED_Init	16	static
+../Src/led.c:33:6:LED_On	16	static
+../Src/led.c:38:6:LED_Off	16	static
+../Src/led.c:43:6:LED_AllOff	16	static
+../Src/led.c:54:6:LED_ShowHeading4	24	static

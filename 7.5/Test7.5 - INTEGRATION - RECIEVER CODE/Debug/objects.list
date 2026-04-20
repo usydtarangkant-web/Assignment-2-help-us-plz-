@@ -1,0 +1,6 @@
+"./Src/led.o"
+"./Src/main.o"
+"./Src/pwm.o"
+"./Src/serial.o"
+"./Src/timer.o"
+"./Startup/startup_stm32f303vctx.o"

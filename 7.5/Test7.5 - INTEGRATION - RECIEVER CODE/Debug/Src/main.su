@@ -1,0 +1,12 @@
+/Users/tarangkant/Desktop/ASSIGNMENT2/stm32f303-definitions/Core/Inc/core_cm4.h:1816:22:__NVIC_SetPriority	16	static
+/Users/tarangkant/Desktop/ASSIGNMENT2/stm32f303-definitions/Core/Inc/core_cm4.h:2022:26:SysTick_Config	16	static
+../Src/main.c:18:13:DebugLED_Init	4	static
+../Src/main.c:36:13:DebugLED_On	16	static
+../Src/main.c:41:13:DebugLED_Off	16	static
+../Src/main.c:46:13:DebugLED_Toggle	16	static
+../Src/main.c:51:13:Board2_SysTickInit	8	static
+../Src/main.c:56:13:Board2_RxCallback	16	static
+../Src/main.c:65:17:HeadingToServoPulseUs	24	static
+../Src/main.c:79:17:HeadingCircularDiff	24	static
+../Src/main.c:100:6:SysTick_Handler	8	static
+../Src/main.c:116:5:main	48	static
