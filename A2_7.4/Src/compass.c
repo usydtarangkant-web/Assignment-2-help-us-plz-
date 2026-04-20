@@ -21,7 +21,7 @@ Functions:
 
 
 /*----------------------------------------------------------
-I2C slave address of onboard magnetometer
+I2C slave address of magnetometer
 ----------------------------------------------------------*/
 #define COMPASS_ADDR 0x3C
 
@@ -32,14 +32,19 @@ Magnetometer register addresses
 #define CFG_REG_A_M   0x60     /* Configuration register A */
 #define CFG_REG_B_M   0x61     /* Configuration register B */
 #define CFG_REG_C_M   0x62     /* Configuration register C */
-#define OUTX_L_REG_M  0x68     /* First output register */
+#define OUTX_L_REG_M  0x68     /* First output register containing X low byte */
 
 
 /*----------------------------------------------------------
 Calibration offsets found experimentally by rotating board
 flat on table.
 
-Used to centre X/Y values around zero before atan2().
+X had range: -190 to -550
+Y had range: 210 to -130
+
+Offset found by (min+max)/2
+
+Used to center X/Y values around zero before atan2().
 ----------------------------------------------------------*/
 #define X_OFFSET   (-370.0f)
 #define Y_OFFSET   (40.0f)
@@ -66,7 +71,7 @@ static int waitSet(uint32_t flag)
 
     for (i = 0; i < 100000; i++)
     {
-        if (I2C1->ISR & flag)
+        if (I2C1->ISR & flag) // Access the ISR register in the I2C1 peripheral, bitwise & with flag bitmasks to check if equal
         {
             return 0;
         }
@@ -88,25 +93,25 @@ PB7 = SDA
 static void i2cInit(void)
 {
     /* Enable clocks */
-    RCC->AHBENR  |= RCC_AHBENR_GPIOBEN;
-    RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
+    RCC->AHBENR  |= RCC_AHBENR_GPIOBEN; // set the correct bit in AHBENR register in RCC peripheral to be enabled using OR
+    RCC->APB1ENR |= RCC_APB1ENR_I2C1EN; // same as above
 
     /* PB6/PB7 alternate function mode */
-    GPIOB->MODER &= ~(0xFUL << 12);
-    GPIOB->MODER |=  (0xAUL << 12);
+    GPIOB->MODER &= ~(0xFUL << 12); // clears bits 12:15 (where PB6 and PB7 are)
+    GPIOB->MODER |=  (0xAUL << 12); // places hex A (0101) into bits 12:15 and sets as alternate function mode (<< 12 shifts left by 12)
 
     /* Open-drain outputs */
-    GPIOB->OTYPER |= (1U << 6) | (1U << 7);
+    GPIOB->OTYPER |= (1U << 6) | (1U << 7); // moves bit 1 to positions of pin 6 and 7 (makes them open-drain)
 
     /* Pull-up resistors */
     GPIOB->PUPDR &= ~(0xFUL << 12);
     GPIOB->PUPDR |=  (0x5UL << 12);
 
-    /* Alternate Function 4 = I2C1 */
-    GPIOB->AFR[0] &= ~(0xFFUL << 24);
+    /* Alternate Function 4 maps to I2C1 */
+    GPIOB->AFR[0] &= ~(0xFFUL << 24); // set PB6 and PB7 to alternate function number 4, which connects pins internally to the I2C1 peripheral
     GPIOB->AFR[0] |=  (0x44UL << 24);
 
-    /* Disable before timing setup */
+    /* Disable before timing setup to avoid unintended operation*/
     I2C1->CR1 &= ~I2C_CR1_PE;
 
     /* 100 kHz timing (8 MHz clock) */
@@ -126,12 +131,12 @@ Returns:
 -1 = fail
 ------------------------------------------------------------
 */
-static int i2cWriteReg(uint8_t reg, uint8_t val)
+static int i2cWriteReg(uint8_t reg, uint8_t val) // This function tells compass sensor to store val (byte 2) in reg (byte 1)
 {
     /* Clear previous STOP flag */
     I2C1->ICR |= I2C_ICR_STOPCF;
 
-    /* Send 2 bytes: register + value */
+    /* Send 2 bytes: register + value to start write transfer */
     I2C1->CR2 =
         COMPASS_ADDR |
         (2U << I2C_CR2_NBYTES_Pos) |
@@ -183,13 +188,15 @@ static int i2cReadBurst(uint8_t reg,
 
     if (waitSet(I2C_ISR_TC)) return -1;
 
-    /* Restart in read mode */
+    /* Restart in read mode (Repeated start)
+     After the repeated start condition, use the peripheral’s I2C address again, but with a read bit
+    */
     I2C1->CR2 =
         COMPASS_ADDR |
         I2C_CR2_RD_WRN |
         ((uint32_t)len << I2C_CR2_NBYTES_Pos) |
         I2C_CR2_START |
-        I2C_CR2_AUTOEND;
+        I2C_CR2_AUTOEND; // STM32 automatically sends STOP after final byte.
 
     for (i = 0; i < len; i++)
     {
@@ -200,6 +207,27 @@ static int i2cReadBurst(uint8_t reg,
 
     return 0;
 }
+
+/*
+
+If called like:
+
+i2cReadBurst(0x68, raw, 6);
+
+Then bus sequence is:
+
+START
+Address + Write
+0x68          (register address)
+
+RESTART
+Address + Read
+
+Read 6 bytes:
+B1 B2 B3 B4 B5 B6
+
+STOP
+ */
 
 
 /*
@@ -217,9 +245,9 @@ void compassInit(void)
     Continuous conversion mode
     Output data rate enabled
     */
-    i2cWriteReg(CFG_REG_A_M, 0x8C);
-    i2cWriteReg(CFG_REG_B_M, 0x01);
-    i2cWriteReg(CFG_REG_C_M, 0x10);
+    i2cWriteReg(CFG_REG_A_M, 0x8C); // Write 0x8C into register 0x60
+    i2cWriteReg(CFG_REG_B_M, 0x01); // Write 0x01 into register 0x61
+    i2cWriteReg(CFG_REG_C_M, 0x10); // Write 0x10 into register 0x62
 }
 
 
