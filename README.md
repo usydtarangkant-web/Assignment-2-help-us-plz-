@@ -96,12 +96,12 @@ The LED module was designed so that `led_set()` and `led_toggle()` only update t
 This module interfaces with the hardware timers on the STM32 Discovery board to generate a pulse width modulation (PWM) signal that drives a hobby servo–with the ability to change the position between clockwise, centre and counterclockwise; and a one-shot event is also triggered after a delay.
 ### Usage
 First, this module can be utilised to set the servo position in either:
-- Clockwise (SERVO_PULSE_CW_US) which sets the servo at 1ms
-- Centre (SERVO_PULSE_CENTRE_US) which sets the servo at 1.5ms
-- Counterclockwise (SERVO_PULSE_CCW_US) which sets the servo at 2ms
-When the user changes the position on the main.c module (Servo_SetPulse(USER INPUT), and runs the program: 
+- Clockwise `(SERVO_PULSE_CW_US)` which sets the servo at 1ms
+- Centre `(SERVO_PULSE_CENTRE_US)` which sets the servo at 1.5ms
+- Counterclockwise `(SERVO_PULSE_CCW_US)` which sets the servo at 2ms
+When the user changes the position on the main.c module `(Servo_SetPulse(USER INPUT)`, and runs the program: 
 - The servo receives the required pwm signal and holds the required position
-- The Systick interrupt runs every 100us until the timer counts down from the set period to 0 (this period can be changed from initial period of 20ms to another period in Timer_SetPeriod(&g_ledTimer, USER INPUT))
+- The Systick interrupt runs every 100us until the timer counts down from the set period to 0 (this period can be changed from initial period of 20ms to another period in `Timer_SetPeriod(&g_ledTimer, USER INPUT)`)
 - This timer can be seen in PE8
 - Then a callback is triggered to reload the timer
 The one-shot occurs after a specified delay (i.e 12000ms) after the user runs the program:
@@ -110,21 +110,21 @@ The one-shot occurs after a specified delay (i.e 12000ms) after the user runs th
 
 ### Valid input
 As stated earlier, the user needs to input three values: the position and the period after the initial period and this can be done by changing:
-- Servo_SetPulse(USER INPUT) in main.c to SERVO_PULSE_CW_US, SERVO_PULSE_CENTRE_US, or SERVO_PULSE_CCW_US
-- Timer_SetPeriod(&g_ledTimer, USER INPUT) in main.c to any specified period
-- Timer_OnceMs(&g_shotTimer, USER INPUT, OneShotCallback) in main.c to any specified delay value
+- `Servo_SetPulse(USER INPUT)` in main.c to SERVO_PULSE_CW_US, SERVO_PULSE_CENTRE_US, or SERVO_PULSE_CCW_US
+- `Timer_SetPeriod(&g_ledTimer, USER INPUT)` in main.c to any specified period
+- `Timer_OnceMs(&g_shotTimer, USER INPUT, OneShotCallback)` in main.c to any specified delay value
 ### Functions and modularity
 To successfully implement this task, it was divided into three modules:
-- main.c: which initialises the board, enables the clocks, toggles required LEDs, sets the interrupt, and ties together all other modules in a loop
-- timer.c: which deals with part a, b and d of the task. This module allows 8 different software timers to be stored, changes between ms to us to timer ticks for the servo, stores a pointer for the callback, starts and stops the periodic timer, allows a change in the period, and has functions for the one-shot (one for the servo in ticks)
-- pwm.c: which deals with part c; and so sets the PWM signal for high and low, initialises the servo, defines the different servo positions, defines the callback functions for the periodic and one-shot functions, and defines the timer ticks to the Systick interrupt
+- `main.c`: which initialises the board, enables the clocks, toggles required LEDs, sets the interrupt, and ties together all other modules in a loop
+- `timer.c`: which deals with part a, b and d of the task. This module allows 8 different software timers to be stored, changes between ms to us to timer ticks for the servo, stores a pointer for the callback, starts and stops the periodic timer, allows a change in the period, and has functions for the one-shot (one for the servo in ticks)
+- `pwm.c`: which deals with part c; and so sets the PWM signal for high and low, initialises the servo, defines the different servo positions, defines the callback functions for the periodic and one-shot functions, and defines the timer ticks to the Systick interrupt
 The corresponding timer.h and pwm.h modules state the functions that are present in each module.
 ### Testing
 To test whether the program is working, in debug mode set breakpoints at:
-- int main(void) to ensure main is reached
-- void Systick_Handler(void) to ensure the interrupt works
-- static void LED_ToggleCallback (void), if this function is reached multiple times then the periodic timer works (this is also verified by viewing PE8 on the board)
-- static void LED_OneShotCallback (void), if this function is only stopped at once then the oneshot timer works (also verified by viewing PE9 on the board)
+- `int main(void)` to ensure main is reached
+- `void Systick_Handler(void)` to ensure the interrupt works
+- `static void LED_ToggleCallback (void)`, if this function is reached multiple times then the periodic timer works (this is also verified by viewing PE8 on the board)
+- `static void LED_OneShotCallback (void)`, if this function is only stopped at once then the oneshot timer works (also verified by viewing PE9 on the board)
 Change the positions in main.c, the period in main.c, and the delay in main.c to verify these functions work by observing how this affects the servo, PE8 and PE9
 ### Notes
 The units were converted from ms to us (where 1 tick is 100us) to allow a more accurate representation of the centre position–and these were represented in timer ticks for the pwm signal and the servo.
@@ -173,10 +173,10 @@ Both boards must use the same baud rate. TX connects to RX and ground must be sh
 ### Summary
 This module interfaces with the STM32F3 Discovery Board’s onboard magnetometer using I2C communication. It reads raw magnetic field data, calculates a compass heading, and stores the results in a structure with a timestamp.
 ### Usage
-- Include the module in the program with #include "compass.h".
-- Call compassInit() once at the start of the program to initialise the I2C interface and configure the sensor.
-- Create a CompassData structure to store the readings.
-- Call compassRead(&compass) repeatedly in the main loop to update the structure with the latest raw values, heading, and timestamp.
+- Include the module in the program with `#include "compass.h"`.
+- Call `compassInit()` once at the start of the program to initialise the I2C interface and configure the sensor.
+- Create a `CompassData` structure to store the readings.
+- Call `compassRead(&compass)` repeatedly in the main loop to update the structure with the latest raw values, heading, and timestamp.
 ### Valid input
 The module communicates directly with the onboard compass sensor through I2C1. No user input is required. Valid output data includes:
 - raw x, y, z values
@@ -186,7 +186,7 @@ The module communicates directly with the onboard compass sensor through I2C1. N
 ### Testing
 The module was tested by rotating the board and observing changing heading values in the debugger with a breakpoint. An LED direction indication was also added to visualise the headings. Raw x, y, and z values were also confirmed to update.
 ### Notes
-Uses I2C1 communication. Heading is calculated using atan2(y,x). X and Y axis are offset to ensure correct headings. Board should remain level for best heading accuracy. Nearby metal objects may affect readings.
+Uses I2C1 communication. Heading is calculated using `atan2(y,x)`. X and Y axis are offset to ensure correct headings. Board should remain level for best heading accuracy. Nearby metal objects may affect readings.
 
 ## 6) Exercise 7.5: Integration Task
 
@@ -209,19 +209,19 @@ The integration task was divided across two STM32 boards, with each source file 
 
 Transmitter board modules:
 
-- main.c controls the overall transmitter operation, reads compass data, and sends packets over UART.
-- compass.c interfaces with the onboard magnetometer using I2C and calculates heading values.
-- button.c handles the interrupt-driven button input used to change display mode.
-- north_ref.c applies heading offset calibration so the displayed heading aligns with true north.
-- serial.c packages and transmits data to the receiver board using UART.
+- `main.c` controls the overall transmitter operation, reads compass data, and sends packets over UART.
+- `compass.c` interfaces with the onboard magnetometer using I2C and calculates heading values.
+- `button.c` handles the interrupt-driven button input used to change display mode.
+- `north_ref.c` applies heading offset calibration so the displayed heading aligns with true north.
+- `serial.c` packages and transmits data to the receiver board using UART.
 
 Receiver board modules:
 
-- main.c controls the receiver logic and processes incoming UART data.
-- serial.c receives and decodes UART packets.
-- pwm.c generates the PWM signal required to control the servo motor.
-- timer.c provides timing functions used for PWM generation.
-- led.c controls the onboard LEDs used to display heading direction.
+- `main.c` controls the receiver logic and processes incoming UART data.
+- `serial.c` receives and decodes UART packets.
+- `pwm.c` generates the PWM signal required to control the servo motor.
+- `timer.c` provides timing functions used for PWM generation.
+- `led.c` controls the onboard LEDs used to display heading direction.
 
 Each module has a separate responsibility, improving readability, testing, maintenance, and reuse of code.
 ### Testing
