@@ -1,0 +1,5 @@
+/Users/tarangkant/Desktop/ASSIGNMENT2/stm32f303-definitions/Core/Inc/core_cm4.h:1816:22:__NVIC_SetPriority	16	static
+/Users/tarangkant/Desktop/ASSIGNMENT2/stm32f303-definitions/Core/Inc/core_cm4.h:2022:26:SysTick_Config	16	static
+../Src/timer.c:6:6:Timer_InitMs	8	static
+../Src/timer.c:12:10:Timer_GetMillis	4	static
+../Src/timer.c:17:6:SysTick_Handler	4	static

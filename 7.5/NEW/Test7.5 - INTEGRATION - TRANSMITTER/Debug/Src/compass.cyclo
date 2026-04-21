@@ -1,0 +1,6 @@
+../Src/compass.c:18:12:waitSet	3
+../Src/compass.c:34:13:i2cInit	1
+../Src/compass.c:56:12:i2cWriteReg	4
+../Src/compass.c:79:12:i2cReadBurst	5
+../Src/compass.c:109:6:compassInit	1
+../Src/compass.c:119:5:compassRead	3

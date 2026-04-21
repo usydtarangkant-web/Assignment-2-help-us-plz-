@@ -1,0 +1,6 @@
+"./Src/button.o"
+"./Src/compass.o"
+"./Src/main.o"
+"./Src/north_ref.o"
+"./Src/serial.o"
+"./Startup/startup_stm32f303vctx.o"

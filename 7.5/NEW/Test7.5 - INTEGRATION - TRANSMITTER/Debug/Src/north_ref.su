@@ -1,0 +1,4 @@
+../Src/north_ref.c:9:6:NorthRef_Init	4	static
+../Src/north_ref.c:16:9:NorthRef_RegisterButtonPress	16	static
+../Src/north_ref.c:30:6:NorthRef_SetCurrentAsNorth	16	static
+../Src/north_ref.c:35:10:NorthRef_Apply	24	static
